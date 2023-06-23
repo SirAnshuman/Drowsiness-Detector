@@ -1,3 +1,4 @@
+from itertools import count
 import cv2
 import numpy as np
 import dlib
@@ -5,12 +6,12 @@ from imutils import face_utils
 from playsound import playsound
 from twilio.rest import Client
 import keys
-import kivy
-from kivy.app import App
-from kivy.uix.gridlayout import GridLayout
-from kivy.uix.label import Label
-from kivy.uix.textinput import TextInput
-from kivy.uix.button import Button
+import time
+import matplotlib.pyplot as plt
+
+x_vals = []
+y_vals = []
+index = count()
 
 cap = cv2.VideoCapture(0)
 
@@ -22,6 +23,11 @@ drowsy = 0
 active = 0
 status = ""
 color = (0, 0, 0)
+new_time = 0
+pre_time = 0
+d = 0
+s = 0
+a = 0
 
 
 def compute(ptA, ptB):
@@ -47,6 +53,13 @@ while True:
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     faces = detector(gray)
+    faces_frame = frame.copy()
+
+    new_time = time.time()
+    fps = 1/(new_time - pre_time)
+    pre_time = new_time
+    fps = int(fps)
+    cv2.putText(faces_frame, str(fps),(8, 80), cv2.FONT_HERSHEY_SIMPLEX,1,(100,255,0),4)
 
     for face in faces:
         x1 = face.left()
@@ -54,7 +67,6 @@ while True:
         x2 = face.right()
         y2 = face.bottom()
 
-        faces_frame = frame.copy()
         cv2.rectangle(faces_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         landmarks = predictor(gray, face)
@@ -66,25 +78,34 @@ while True:
                               landmarks[44], landmarks[47], landmarks[46], landmarks[45])
 
         if (left_blink == 0 or right_blink == 0):
+            s = s+1
+            x_vals.append(next(index))
+            y_vals.append("Sleeping")
             sleep += 1
             drowsy = 0
             active = 0
 
-            if (sleep > 60):
+            if (sleep > 500):
                 client = Client(keys.account_sid, keys.auth_token)
                 message = client.messages.create(
-                    body="Mr XYZ has fallen asleep in his car",
+                    body="Anshuman Tripathi has fallen asleep in your class."
+                         "  Enrollment No - 0002CB201013"
+                         "  Semester - 6th",
                     from_=keys.twilio_number,
                     to=keys.target_number
                 )
 
-            if (sleep > 3):
+            if (sleep > 6):
                 status = "SLEEPING !!!"
                 color = (255, 0, 0)
-                playsound('Alarm.mp3')
+                if(sleep > 100):
+                    playsound('Alarm.mp3')
 
 
         elif (left_blink == 1 or right_blink == 1):
+            d = d+1
+            x_vals.append(next(index))
+            y_vals.append("Drowsy")
             sleep = 0
             active = 0
             drowsy += 1
@@ -93,6 +114,9 @@ while True:
                 color = (0, 0, 255)
 
         else:
+            a = a+1
+            x_vals.append(next(index))
+            y_vals.append("Active")
             drowsy = 0
             sleep = 0
             active += 1
@@ -106,8 +130,25 @@ while True:
             (x, y) = landmarks[n]
             cv2.circle(faces_frame, (x, y), 1, (255, 255, 255), -1)
 
+
+
     cv2.imshow("Frame", frame)
+    cv2.imshow("Detector Output", faces_frame)
 
     key = cv2.waitKey(1)
     if key == 27:
+        Status = 'Sleepy', 'Drowsy', 'Active'
+        Time = [s, d, a]
+        explode = (0, 0, 0.1)
+
+        plt.subplot(121)
+        plt.plot(x_vals, y_vals)
+
+        plt.subplot(122)
+        plt.pie(Time, explode=explode, labels=Status, autopct='%1.2f%%')
+
+        plt.suptitle('Anshuman Tripathi MindMonitor Data')
+        plt.savefig("chart.jpg")
+
+        plt.show()
         break
